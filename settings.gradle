@@ -1,0 +1,6 @@
+rootProject.name = 'kafka-streams'
+include("kafka_stream_concumer")
+//include("kafka_stream_producer")
+//include("kafka-samples-producer")
+//include("kafka-samples-consaumer")
+

@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.4'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+//    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+//    implementation("org.jetbrains.kotlin:kotlin-reflect")
+//    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+//    implementation("org.springframework.cloud:spring-cloud-stream")
+//    implementation("org.springframework.cloud:spring-cloud-stream-binder-kafka")
+//    implementation("org.springframework.kafka:spring-kafka")
+//    implementation("io.github.microutils:kotlin-logging:2.0.11")
+
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.apache.kafka:kafka-streams'
+    implementation 'org.springframework.kafka:spring-kafka'
+
+
+    implementation group: 'org.springframework.cloud', name: 'spring-cloud-stream', version: '4.0.3'
+    implementation group: 'org.springframework.cloud', name: 'spring-cloud-stream-binder-kafka', version: '4.0.4'
+
+
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.0'
+
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
