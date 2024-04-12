@@ -1,5 +1,7 @@
 package com.example.kafka_stream_concumer.config;
 
+import com.example.kafka_stream_concumer.domain.AggregateTelemetryDataSerde;
+import com.example.kafka_stream_concumer.domain.AggregatedTelemetryData;
 import com.example.kafka_stream_concumer.domain.TelemetryData;
 import com.example.kafka_stream_concumer.domain.TelemetryDataSerde;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -7,9 +9,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -44,15 +49,6 @@ public class KafkaStreamConfig {
         return Serdes.serdeFrom(new JsonSerializer<>(), new JsonDeserializer<>(TelemetryData.class));
     }
 
-//    @Bean
-//    public KTable<String, TelemetryData> kTable(StreamsBuilder kStreamBuilder) {
-//
-//        KTable<String, TelemetryData> userStream = kStreamBuilder.table("space-probe-telemetry-data");
-//        userStream.toStream().print(Printed.<String,TelemetryData>toSysOut().withLabel("KTable - telemetry-data"));
-//
-//        return userStream;
-//    }
-
     @Bean
     public KStream<String, String> KTable(StreamsBuilder kStreamBuilder) {
         KStream<String, String> stream = kStreamBuilder
@@ -68,48 +64,32 @@ public class KafkaStreamConfig {
     }
 
     @Bean
-    public KStream<String, TelemetryData> kStream(StreamsBuilder kStreamBuilder) {
-        KStream<String, TelemetryData> userStream = kStreamBuilder
+    public KStream<String, AggregatedTelemetryData> calculatedMaxSpeedAndTraveledDistance(StreamsBuilder kStreamBuilder) {
+        KStream<String, TelemetryData> stream = kStreamBuilder
                 .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
-//        KStream<String, TelemetryData> userStream = stream
-//              .mapValues(this::getTelemetryDataFromString);
-//                .flatMapValues(v -> Arrays.asList());
-
-        userStream.print(Printed.<String,TelemetryData>toSysOut().withLabel("KStream - telemetry-data"));
-//
-        var t = userStream.groupBy((k,v) -> v.probeId())
-                .reduce((k,v) -> v );
-
-//        t.toStream().print(Printed.<String,Long>toSysOut().withLabel("KTable - telemetry-data"));
-//
-//        userStream.to("telemetry-data", Produced.with(Serdes.String(), userSerde()));
-
-//        KTable<String, TelemetryData> userStream = kStreamBuilder.table("space-probe-telemetry-data");
-        t.toStream().print(Printed.<String,TelemetryData>toSysOut().withLabel("KTable - telemetry-data"));
-
-        return userStream;
+        return stream
+                .groupBy((k,v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
+                .aggregate(
+                        AggregatedTelemetryData::new,
+                        (aggKey, newValue, aggValue) -> updateTotals(aggKey, newValue, aggValue),
+                        Materialized.with(Serdes.String(), new AggregateTelemetryDataSerde()))
+                .toStream();
     }
 
-    String printValue(String userString){
-        log.info("Successfully read "+userString);
-        return userString;
+    public AggregatedTelemetryData updateTotals(
+            String probeId,
+            TelemetryData lastTelemetryReading,
+            AggregatedTelemetryData currentAggregatedValue) {
+        double totalDistanceTraveled =
+                lastTelemetryReading.getTraveledDistanceFeet() + currentAggregatedValue.getTraveledDistanceFeet();
+        double maxSpeed = Math.max(lastTelemetryReading.getCurrentSpeedMph(), currentAggregatedValue.getMaxSpeedMph());
+        AggregatedTelemetryData aggregatedTelemetryData = new AggregatedTelemetryData(
+                totalDistanceTraveled,
+                maxSpeed
+        );
+        log.info("Calculated new aggregated telemetry data for probe {}. New max speed: {} and traveled distance {}",
+                probeId, aggregatedTelemetryData.getMaxSpeedMph(), aggregatedTelemetryData.getTraveledDistanceFeet());
+        return aggregatedTelemetryData;
     }
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
-
-    TelemetryData getTelemetryDataFromString(String telemetryDataString) {
-        TelemetryData user = null;
-        try {
-            user = objectMapper().readValue(telemetryDataString, TelemetryData.class);
-            log.info("Successfully read "+ user);
-        } catch (JsonProcessingException e) {
-            log.error(e.getMessage(), e);
-        }
-        return user;
-    }
-
 
 }
