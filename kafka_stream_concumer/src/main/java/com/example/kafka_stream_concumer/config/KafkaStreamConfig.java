@@ -77,6 +77,15 @@ public class KafkaStreamConfig {
                 .toStream();
     }
 
+//    @Bean
+//    public KStream<String, TelemetryData> outStream(StreamsBuilder kStreamBuilder) {
+//        KStream<String, TelemetryData> stream = kStreamBuilder
+//                .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
+//        stream.print(Printed.<String,TelemetryData>toSysOut().withLabel("OUT - "));
+//        stream.to("out");
+//        return stream;
+//    }
+
     public AggregatedTelemetryData updateTotals(
             String probeId,
             TelemetryData lastTelemetryReading,
@@ -85,8 +94,8 @@ public class KafkaStreamConfig {
                 lastTelemetryReading.getTraveledDistanceFeet() + currentAggregatedValue.getTraveledDistanceFeet();
         double maxSpeed = Math.max(lastTelemetryReading.getCurrentSpeedMph(), currentAggregatedValue.getMaxSpeedMph());
         AggregatedTelemetryData aggregatedTelemetryData = new AggregatedTelemetryData(
-                totalDistanceTraveled,
-                maxSpeed
+                maxSpeed,
+                totalDistanceTraveled
         );
         log.info("Calculated new aggregated telemetry data for probe {}. New max speed: {} and traveled distance {}",
                 probeId, aggregatedTelemetryData.getMaxSpeedMph(), aggregatedTelemetryData.getTraveledDistanceFeet());

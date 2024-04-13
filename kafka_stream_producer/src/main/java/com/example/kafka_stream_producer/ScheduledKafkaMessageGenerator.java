@@ -18,7 +18,7 @@ import java.util.Random;
 @Component
 @AllArgsConstructor
 public class ScheduledKafkaMessageGenerator {
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, TelemetryData> kafkaTemplate;
 
     @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
     public void emitSampleTelemetryData() {
@@ -37,7 +37,7 @@ public class ScheduledKafkaMessageGenerator {
 
                 .build();
         log.info("Telemetry data send {}", telemetryData);
-        kafkaTemplate.send("space-probe-telemetry-data", kafkaMessage);
+        kafkaTemplate.send("space-probe-telemetry-data", String.valueOf(new Random().nextInt(10)), telemetryData);
     }
 
 //    @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
@@ -48,6 +48,6 @@ public class ScheduledKafkaMessageGenerator {
 //                .build();
         var word = listOfWords.get(new Random().nextInt(listOfWords.size()));
         log.info("Telemetry data send {}", word);
-        kafkaTemplate.send("hardcoded-words-out", word);
+//        kafkaTemplate.send("hardcoded-words-out", word);
     }
 }
