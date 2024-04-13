@@ -1,0 +1,8 @@
+
+spring:
+  application:
+    name: demo_kafka_stream_producer
+#  kafka:
+#    consumer:
+#      properties:
+#        spring.json.trusted.packages: "com.example.kafka_stream_concumer"

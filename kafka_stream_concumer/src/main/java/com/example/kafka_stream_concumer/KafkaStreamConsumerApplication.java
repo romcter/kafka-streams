@@ -1,13 +1,13 @@
-package com.example.kafka_stream_producer;
+package com.example.kafka_stream_concumer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class KafkaStreamProducerApplication {
+public class KafkaStreamConsumerApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(KafkaStreamProducerApplication.class, args);
+        SpringApplication.run(KafkaStreamConsumerApplication.class, args);
     }
 
 }
