@@ -22,11 +22,11 @@ import java.util.Random;
 @AllArgsConstructor
 public class ScheduledKafkaMessageGenerator {
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final Gson gson = new Gson();;
+    private final Gson gson = new Gson();
 
     @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
     public void emitSampleTelemetryData() {
-        int nextInt = new Random().nextInt(10);
+        int nextInt = new Random().nextInt(100,110);
         TelemetryData telemetryData = new TelemetryData(
                 Integer.toString(nextInt),
                 LocalDateTime.now().toString(),
@@ -39,8 +39,7 @@ public class ScheduledKafkaMessageGenerator {
 
         String json = gson.toJson(telemetryData);
 
-        var random = String.valueOf(new Random().nextInt(10));
-
+        var random = String.valueOf(new Random().nextInt(100,110));
         kafkaTemplate.send("space-probe-telemetry-data", random, json);
         kafkaTemplate.send("count-probe-telemetry-data", random, json);
     }

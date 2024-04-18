@@ -67,51 +67,55 @@ public class KafkaStreamConfig {
     public KStream<String, AggregatedTelemetryData> calculatedMaxSpeedAndTraveledDistance(StreamsBuilder kStreamBuilder) {
         KStream<String, TelemetryData> stream = kStreamBuilder
                 .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
-        return stream
+        var str = stream
                 .groupBy((k,v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
                 .aggregate(
                         AggregatedTelemetryData::new,
-                        (aggKey, newValue, aggValue) -> updateTotals(aggKey, newValue, aggValue),
+                        (aggKey, newValue, aggValue) -> updateTotals(newValue, aggValue),
                         Materialized.with(Serdes.String(), new AggregateTelemetryDataSerde()))
                 .toStream();
+        str.print(Printed.<String, AggregatedTelemetryData>toSysOut().withLabel("Calculated new aggregated data"));
+        return str;
     }
 
     @Bean
-    public KTable<String, TelemetryData> countAllProbe(StreamsBuilder kStreamBuilder) {
-        KTable<String, TelemetryData> stream = kStreamBuilder
-                .table("count-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
+    public KStream<String, TelemetryData> countAllProbe(StreamsBuilder kStreamBuilder) {
+        KStream<String, TelemetryData> stream = kStreamBuilder
+                .stream("count-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
+
         stream
-//                .mapValues(v -> v.getProbeId())
-                .groupBy((k,v) -> KeyValue.pair(v.getProbeId(), "1"), Grouped.with(Serdes.String(), Serdes.String()))
-                .count()
-                .toStream().print(Printed.<String, Long>toSysOut().withLabel("Age Count"));
+                .groupBy((k,v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
+                .aggregate(
+                        () -> 0,
+                        (aggKey, newValue, aggValue) -> aggValue + 1,
+                        Materialized.with(Serdes.String(), Serdes.Integer())
+                ).toStream()
+                .print(Printed.<String, Integer>toSysOut().withLabel("Probe Count"));
 
         return stream;
     }
 
-//    @Bean
-//    public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
-//        KStream<String, String> stream = kStreamBuilder
-//                .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), Serdes.String()));
-//        stream.print(Printed.<String,String>toSysOut().withLabel("OUT - "));
-//        stream.to("out");
-//        return stream;
-//    }
+    @Bean
+    public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
+        KStream<String, String> stream = kStreamBuilder
+                .stream("space-probe-aggregate-telemetry-data-esa", Consumed.with(Serdes.String(), Serdes.String()));
+        stream.print(Printed.<String,String>toSysOut().withLabel("OUT - "));
+        stream.to("out");
+        return stream;
+    }
 
     public AggregatedTelemetryData updateTotals(
-            String probeId,
             TelemetryData lastTelemetryReading,
             AggregatedTelemetryData currentAggregatedValue) {
         double totalDistanceTraveled =
                 lastTelemetryReading.getTraveledDistanceFeet() + currentAggregatedValue.getTraveledDistanceFeet();
         double maxSpeed = Math.max(lastTelemetryReading.getCurrentSpeedMph(), currentAggregatedValue.getMaxSpeedMph());
-        AggregatedTelemetryData aggregatedTelemetryData = new AggregatedTelemetryData(
+        Integer counter = currentAggregatedValue.getCounter() + 1;
+        return new AggregatedTelemetryData(
                 maxSpeed,
-                totalDistanceTraveled
+                totalDistanceTraveled,
+                counter
         );
-        log.info("Calculated new aggregated telemetry data for probe {}. New max speed: {} and traveled distance {}",
-                probeId, aggregatedTelemetryData.getMaxSpeedMph(), aggregatedTelemetryData.getTraveledDistanceFeet());
-        return aggregatedTelemetryData;
     }
 
 }
