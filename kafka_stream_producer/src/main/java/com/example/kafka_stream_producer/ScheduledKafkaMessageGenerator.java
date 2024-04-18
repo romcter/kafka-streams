@@ -1,5 +1,8 @@
 package com.example.kafka_stream_producer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -18,7 +21,8 @@ import java.util.Random;
 @Component
 @AllArgsConstructor
 public class ScheduledKafkaMessageGenerator {
-    private final KafkaTemplate<String, TelemetryData> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final Gson gson = new Gson();;
 
     @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
     public void emitSampleTelemetryData() {
@@ -31,16 +35,14 @@ public class ScheduledKafkaMessageGenerator {
                 nextInt < 5 ? SpaceAgency.NASA : SpaceAgency.ESA,
                 new Random().nextDouble(0.0, 10.0)
         );
-        Message<?> kafkaMessage = MessageBuilder
-                .withPayload(telemetryData)
-                .setHeader(KafkaHeaders.TOPIC, String.valueOf(new Random().nextInt(10)))
-
-                .build();
         log.info("Telemetry data send {}", telemetryData);
-        kafkaTemplate.send("space-probe-telemetry-data", String.valueOf(new Random().nextInt(10)), telemetryData);
+
+        String json = gson.toJson(telemetryData);
+
+        kafkaTemplate.send("space-probe-telemetry-data", String.valueOf(new Random().nextInt(10)), json);
     }
 
-//    @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
+    @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
     public void sendHardcodedWords() {
         List<String> listOfWords = Arrays.asList("Kafka", "test", "Telem", "marafon", "chinazes", "lawe", "teror", "error", "past", "simple");
 //        Message<?> kafkaMessage = MessageBuilder
