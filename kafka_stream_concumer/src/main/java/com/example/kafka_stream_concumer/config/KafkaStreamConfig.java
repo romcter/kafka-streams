@@ -76,6 +76,19 @@ public class KafkaStreamConfig {
                 .toStream();
     }
 
+    @Bean
+    public KTable<String, TelemetryData> countAllProbe(StreamsBuilder kStreamBuilder) {
+        KTable<String, TelemetryData> stream = kStreamBuilder
+                .table("count-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
+        stream
+//                .mapValues(v -> v.getProbeId())
+                .groupBy((k,v) -> KeyValue.pair(v.getProbeId(), "1"), Grouped.with(Serdes.String(), Serdes.String()))
+                .count()
+                .toStream().print(Printed.<String, Long>toSysOut().withLabel("Age Count"));
+
+        return stream;
+    }
+
 //    @Bean
 //    public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
 //        KStream<String, String> stream = kStreamBuilder

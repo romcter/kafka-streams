@@ -39,7 +39,10 @@ public class ScheduledKafkaMessageGenerator {
 
         String json = gson.toJson(telemetryData);
 
-        kafkaTemplate.send("space-probe-telemetry-data", String.valueOf(new Random().nextInt(10)), json);
+        var random = String.valueOf(new Random().nextInt(10));
+
+        kafkaTemplate.send("space-probe-telemetry-data", random, json);
+        kafkaTemplate.send("count-probe-telemetry-data", random, json);
     }
 
     @Scheduled(initialDelay = 5000L, fixedRate = 1000L)
