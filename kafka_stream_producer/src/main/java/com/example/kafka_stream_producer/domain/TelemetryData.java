@@ -1,4 +1,4 @@
-package com.example.kafka_stream_producer;
+package com.example.kafka_stream_producer.domain;
 
 import lombok.ToString;
 

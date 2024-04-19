@@ -1,9 +1,6 @@
 package com.example.kafka_stream_concumer.config;
 
-import com.example.kafka_stream_concumer.domain.AggregateTelemetryDataSerde;
-import com.example.kafka_stream_concumer.domain.AggregatedTelemetryData;
-import com.example.kafka_stream_concumer.domain.TelemetryData;
-import com.example.kafka_stream_concumer.domain.TelemetryDataSerde;
+import com.example.kafka_stream_concumer.domain.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +55,7 @@ public class KafkaStreamConfig {
 
         KTable<String, Long> kTable = kGroupedStream.count();
 
-        kTable.toStream().print(Printed.<String,Long>toSysOut().withLabel("KTable - telemetry-data"));
+        kTable.toStream().print(Printed.<String, Long>toSysOut().withLabel("KTable - telemetry-data"));
 
         return stream;
     }
@@ -68,7 +65,7 @@ public class KafkaStreamConfig {
         KStream<String, TelemetryData> stream = kStreamBuilder
                 .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
         var str = stream
-                .groupBy((k,v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
+                .groupBy((k, v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
                 .aggregate(
                         AggregatedTelemetryData::new,
                         (aggKey, newValue, aggValue) -> updateTotals(newValue, aggValue),
@@ -84,7 +81,7 @@ public class KafkaStreamConfig {
                 .stream("count-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
 
         stream
-                .groupBy((k,v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
+                .groupBy((k, v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
                 .aggregate(
                         () -> 0,
                         (aggKey, newValue, aggValue) -> aggValue + 1,
@@ -96,10 +93,53 @@ public class KafkaStreamConfig {
     }
 
     @Bean
+    public KStream<String, DepartmentAggregate> calculateDepartmentSalary(StreamsBuilder kStreamBuilder) {
+        var stream = kStreamBuilder
+                .table("calculate-department-salary", Consumed.with(Serdes.String(), new EmployeeDataSerde()))
+//                .groupBy((k,v) -> KeyValue.pair(v.getDepartment(), v), Grouped.with(Serdes.String(), new EmployeeDataSerde()))
+                .groupBy((k, v) -> KeyValue.pair(v.getDepartment().toString(), v), Grouped.with(Serdes.String(), new EmployeeDataSerde()))
+                .aggregate(
+                        DepartmentAggregate::new,
+                        (k, v, aggV) -> addEmployee(v, aggV),
+                        (k, v, aggV) -> deleteEmployee(v, aggV),
+                        Materialized.with(Serdes.String(), new DepartmentAggregateSerde())
+//                        ,Materialized.<String, DepartmentAggregate, KeyValueStore<Byte, byte[]>>as(
+//                                "").withValueSerde(new DepartmentAggregateSerde())
+                ).toStream();
+        stream.print(Printed.<String, DepartmentAggregate>toSysOut().withLabel("Employee department"));
+
+        return stream;
+    }
+
+    private DepartmentAggregate addEmployee(Employee v, DepartmentAggregate aggV) {
+        log.info("ADD: V is {}, aggV is {}", v, aggV);
+        return DepartmentAggregate.builder()
+                .employeeCount(aggV.employeeCount + 1)
+                .totalSalary(aggV.totalSalary + v.salary)
+                .avgSalary((aggV.totalSalary + v.salary) / (aggV.employeeCount + 1))
+//                .employeeCount(0)
+//                .totalSalary(0)
+//                .avgSalary(0)
+                .build();
+    }
+
+    private DepartmentAggregate deleteEmployee(Employee v, DepartmentAggregate aggV) {
+        log.info("DELETE: V is {}, aggV is {}", v, aggV);
+        return DepartmentAggregate.builder()
+//                .employeeCount(0)
+//                .totalSalary(0)
+//                .avgSalary(0)
+                .employeeCount(aggV.employeeCount - 1)
+                .totalSalary(aggV.totalSalary - v.salary)
+                .avgSalary((aggV.totalSalary - v.salary) / (aggV.employeeCount <= 1 ? 1 : aggV.employeeCount -1))
+                .build();
+    }
+
+//        @Bean
     public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
         KStream<String, String> stream = kStreamBuilder
-                .stream("space-probe-aggregate-telemetry-data-esa", Consumed.with(Serdes.String(), Serdes.String()));
-        stream.print(Printed.<String,String>toSysOut().withLabel("OUT - "));
+                .stream("calculate-department-salary", Consumed.with(Serdes.String(), Serdes.String()));
+        stream.print(Printed.<String, String>toSysOut().withLabel("OUT - "));
         stream.to("out");
         return stream;
     }
