@@ -89,8 +89,8 @@ public class ScheduledKafkaMessageGenerator {
 
         if(counter < list.size()) {
             var employee = list.get(counter);
-            kafkaTemplate.send("tumbling-windowing-invoice", String.valueOf(employee.getStoreID()), gson.toJson(employee));
-            log.info("Send tumbling-windowing-invoice invoice counter {}", counter);
+            kafkaTemplate.send("windowing-invoice", String.valueOf(employee.getStoreID()), gson.toJson(employee));
+            log.info("Send windowing-invoice invoice counter {}", counter);
             counter = counter + 1;
         }
     }

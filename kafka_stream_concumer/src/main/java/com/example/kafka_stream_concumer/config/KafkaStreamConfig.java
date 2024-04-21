@@ -1,18 +1,13 @@
 package com.example.kafka_stream_concumer.config;
 
 import com.example.kafka_stream_concumer.domain.*;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -25,7 +20,6 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -66,17 +60,17 @@ public class KafkaStreamConfig {
 
     @Bean
     public KStream<String, AggregatedTelemetryData> calculatedMaxSpeedAndTraveledDistance(StreamsBuilder kStreamBuilder) {
-        KStream<String, TelemetryData> stream = kStreamBuilder
-                .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()));
-        var str = stream
+        KStream<String, AggregatedTelemetryData> stream = kStreamBuilder
+                .stream("space-probe-telemetry-data", Consumed.with(Serdes.String(), new TelemetryDataSerde()))
                 .groupBy((k, v) -> v.getProbeId(), Grouped.with(Serdes.String(), new TelemetryDataSerde()))
                 .aggregate(
                         AggregatedTelemetryData::new,
                         (aggKey, newValue, aggValue) -> updateTotals(newValue, aggValue),
                         Materialized.with(Serdes.String(), new AggregateTelemetryDataSerde()))
                 .toStream();
-        str.print(Printed.<String, AggregatedTelemetryData>toSysOut().withLabel("Calculated new aggregated data"));
-        return str;
+
+        stream.print(Printed.<String, AggregatedTelemetryData>toSysOut().withLabel("Calculated new aggregated data"));
+        return stream;
     }
 
     @Bean
@@ -114,49 +108,16 @@ public class KafkaStreamConfig {
         return stream;
     }
 
-    private DepartmentAggregate addEmployee(Employee v, DepartmentAggregate aggV) {
-        log.info("ADD: V is {}, aggV is {}", v, aggV);
-        return DepartmentAggregate.builder()
-                .employeeCount(aggV.employeeCount + 1)
-                .totalSalary(aggV.totalSalary + v.salary)
-                .avgSalary((aggV.totalSalary + v.salary) / (aggV.employeeCount + 1))
-//                .employeeCount(0)
-//                .totalSalary(0)
-//                .avgSalary(0)
-                .build();
-    }
-
-    private DepartmentAggregate deleteEmployee(Employee v, DepartmentAggregate aggV) {
-        log.info("DELETE: V is {}, aggV is {}", v, aggV);
-        return DepartmentAggregate.builder()
-//                .employeeCount(0)
-//                .totalSalary(0)
-//                .avgSalary(0)
-                .employeeCount(aggV.employeeCount - 1)
-                .totalSalary(aggV.totalSalary - v.salary)
-                .avgSalary((aggV.totalSalary - v.salary) / (aggV.employeeCount <= 1 ? 1 : aggV.employeeCount - 1))
-                .build();
-    }
-
-    //        @Bean
-    public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
-        KStream<String, String> stream = kStreamBuilder
-                .stream("tumbling-windowing-invoice", Consumed.with(Serdes.String(), Serdes.String()));
-        stream.print(Printed.<String, String>toSysOut().withLabel("OUT - "));
-        stream.to("out");
-        return stream;
-    }
-
-
     @Bean
-    public KTable<Windowed<String>, Long> tumblingWindowingInvoiceStream(StreamsBuilder streamsBuilder) {
+    public KTable<Windowed<String>, Long> windowingInvoiceStream(StreamsBuilder streamsBuilder) {
         KTable<Windowed<String>, Long> kTable = streamsBuilder
-                .stream("tumbling-windowing-invoice", Consumed.with(Serdes.String(), new SimpleInvoiceSerde())
+                .stream("windowing-invoice", Consumed.with(Serdes.String(), new SimpleInvoiceSerde())
                         .withTimestampExtractor(new InvoiceTimeExtractor()))
                 .groupByKey(Grouped.with(Serdes.String(), new SimpleInvoiceSerde()))
                 .windowedBy(TimeWindows.of(Duration.ofMinutes(5)))
-                .count()
-                ;
+//                .windowedBy(SessionWindows.with(Duration.ofMinutes(5)))
+                .count();
+//                .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()));
 
         kTable.toStream().foreach((kWindowed, v) ->
                 log.info("StoreID: " + kWindowed.key() +
@@ -169,7 +130,16 @@ public class KafkaStreamConfig {
         return kTable;
     }
 
-    public AggregatedTelemetryData updateTotals(
+    //        @Bean
+    public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
+        KStream<String, String> stream = kStreamBuilder
+                .stream("windowing-invoice", Consumed.with(Serdes.String(), Serdes.String()));
+        stream.print(Printed.<String, String>toSysOut().withLabel("OUT - "));
+        stream.to("out");
+        return stream;
+    }
+
+    private AggregatedTelemetryData updateTotals(
             TelemetryData lastTelemetryReading,
             AggregatedTelemetryData currentAggregatedValue) {
         double totalDistanceTraveled =
@@ -183,4 +153,21 @@ public class KafkaStreamConfig {
         );
     }
 
+    private DepartmentAggregate addEmployee(Employee v, DepartmentAggregate aggV) {
+        log.info("ADD: V is {}, aggV is {}", v, aggV);
+        return DepartmentAggregate.builder()
+                .employeeCount(aggV.employeeCount + 1)
+                .totalSalary(aggV.totalSalary + v.salary)
+                .avgSalary((aggV.totalSalary + v.salary) / (aggV.employeeCount + 1))
+                .build();
+    }
+
+    private DepartmentAggregate deleteEmployee(Employee v, DepartmentAggregate aggV) {
+        log.info("DELETE: V is {}, aggV is {}", v, aggV);
+        return DepartmentAggregate.builder()
+                .employeeCount(aggV.employeeCount - 1)
+                .totalSalary(aggV.totalSalary - v.salary)
+                .avgSalary((aggV.totalSalary - v.salary) / (aggV.employeeCount <= 1 ? 1 : aggV.employeeCount - 1))
+                .build();
+    }
 }
