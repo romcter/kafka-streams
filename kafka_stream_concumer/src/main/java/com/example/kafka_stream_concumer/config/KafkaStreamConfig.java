@@ -12,6 +12,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -21,6 +22,9 @@ import org.springframework.kafka.config.KafkaStreamsConfiguration;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -96,7 +100,6 @@ public class KafkaStreamConfig {
     public KStream<String, DepartmentAggregate> calculateDepartmentSalary(StreamsBuilder kStreamBuilder) {
         var stream = kStreamBuilder
                 .table("calculate-department-salary", Consumed.with(Serdes.String(), new EmployeeDataSerde()))
-//                .groupBy((k,v) -> KeyValue.pair(v.getDepartment(), v), Grouped.with(Serdes.String(), new EmployeeDataSerde()))
                 .groupBy((k, v) -> KeyValue.pair(v.getDepartment().toString(), v), Grouped.with(Serdes.String(), new EmployeeDataSerde()))
                 .aggregate(
                         DepartmentAggregate::new,
@@ -131,17 +134,39 @@ public class KafkaStreamConfig {
 //                .avgSalary(0)
                 .employeeCount(aggV.employeeCount - 1)
                 .totalSalary(aggV.totalSalary - v.salary)
-                .avgSalary((aggV.totalSalary - v.salary) / (aggV.employeeCount <= 1 ? 1 : aggV.employeeCount -1))
+                .avgSalary((aggV.totalSalary - v.salary) / (aggV.employeeCount <= 1 ? 1 : aggV.employeeCount - 1))
                 .build();
     }
 
-//        @Bean
+    //        @Bean
     public KStream<String, String> outStream(StreamsBuilder kStreamBuilder) {
         KStream<String, String> stream = kStreamBuilder
-                .stream("calculate-department-salary", Consumed.with(Serdes.String(), Serdes.String()));
+                .stream("tumbling-windowing-invoice", Consumed.with(Serdes.String(), Serdes.String()));
         stream.print(Printed.<String, String>toSysOut().withLabel("OUT - "));
         stream.to("out");
         return stream;
+    }
+
+
+    @Bean
+    public KTable<Windowed<String>, Long> tumblingWindowingInvoiceStream(StreamsBuilder streamsBuilder) {
+        KTable<Windowed<String>, Long> kTable = streamsBuilder
+                .stream("tumbling-windowing-invoice", Consumed.with(Serdes.String(), new SimpleInvoiceSerde())
+                        .withTimestampExtractor(new InvoiceTimeExtractor()))
+                .groupByKey(Grouped.with(Serdes.String(), new SimpleInvoiceSerde()))
+                .windowedBy(TimeWindows.of(Duration.ofMinutes(5)))
+                .count()
+                ;
+
+        kTable.toStream().foreach((kWindowed, v) ->
+                log.info("StoreID: " + kWindowed.key() +
+                        " Window start: " + Instant.ofEpochMilli(kWindowed.window().start()).atOffset(ZoneOffset.UTC) +
+                        " Window end: " + Instant.ofEpochMilli(kWindowed.window().end()).atOffset(ZoneOffset.UTC) +
+                        " Count: " + v +
+                        " Window#: " + kWindowed.window().hashCode()
+                ));
+
+        return kTable;
     }
 
     public AggregatedTelemetryData updateTotals(

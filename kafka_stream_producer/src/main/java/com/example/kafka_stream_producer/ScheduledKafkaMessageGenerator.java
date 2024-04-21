@@ -1,10 +1,10 @@
 package com.example.kafka_stream_producer;
 
 import com.example.kafka_stream_producer.domain.Employee;
+import com.example.kafka_stream_producer.domain.SimpleInvoice;
 import com.example.kafka_stream_producer.domain.SpaceAgency;
 import com.example.kafka_stream_producer.domain.TelemetryData;
 import com.google.gson.Gson;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -55,7 +55,7 @@ public class ScheduledKafkaMessageGenerator {
         kafkaTemplate.send("hardcoded-words-out", word);
     }
 
-    @Scheduled(initialDelay = 5000L, fixedRate = 10000L)
+//    @Scheduled(initialDelay = 5000L, fixedRate = 10000L)
     public void sendEmployee() {
         List<Employee> list = new ArrayList<>(List.of(
                 new Employee(1111, "Rom", EMPLOYEE_DEPARTMENT, 5000),
@@ -75,4 +75,24 @@ public class ScheduledKafkaMessageGenerator {
             counter = counter + 1;
         }
     }
+
+    @Scheduled(initialDelay = 5000L, fixedRate = 10000L)
+    public void sendInvoice() {
+        List<SimpleInvoice> list = new ArrayList<>(List.of(
+                new SimpleInvoice("101", 1549360860000L, "STR1534", 1920.0),
+                new SimpleInvoice("102", 1549360900000L, "STR1535", 1860.0),
+                new SimpleInvoice("103", 1549360999000L, "STR1534", 2400.0),
+                new SimpleInvoice("104", 1549361160000L, "STR1536", 8936.0),
+                new SimpleInvoice("105", 1549361270000L, "STR1534", 6375.0),
+                new SimpleInvoice("106", 1549361370000L, "STR1536", 9365.0)
+        ));
+
+        if(counter < list.size()) {
+            var employee = list.get(counter);
+            kafkaTemplate.send("tumbling-windowing-invoice", String.valueOf(employee.getStoreID()), gson.toJson(employee));
+            log.info("Send tumbling-windowing-invoice invoice counter {}", counter);
+            counter = counter + 1;
+        }
+    }
+
 }
